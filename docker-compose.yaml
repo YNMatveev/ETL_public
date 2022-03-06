@@ -1,0 +1,71 @@
+version: '3.8'
+services:
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.15.2
+    container_name: es01_etl
+    environment:
+      - node.name=es01
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - elastic
+
+  kib01:
+    image: docker.elastic.co/kibana/kibana:7.15.2
+    container_name: kib01_etl
+    ports:
+      - 5601:5601
+    environment:
+      ELASTICSEARCH_URL: http://es01:9200
+      ELASTICSEARCH_HOSTS: http://es01:9200
+    networks:
+      - elastic
+
+  database:
+    container_name: movies_postgres_etl
+    image: postgres:13
+    restart: always
+    networks:
+      - elastic
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+      - ./src/db:/docker-entrypoint-initdb.d
+    env_file:
+      - ./.env
+
+  etl:
+    container_name: etl_script
+    build:
+      context: .
+    image: etl:latest
+    pull_policy: never
+    restart: always
+    networks:
+      - elastic
+    depends_on:
+      - es01
+      - database
+    env_file:
+      - ./.env
+
+volumes:
+  elastic_data:
+    name: elastic_database_etl
+    driver: local
+  postgres_data:
+    name: movies_database_etl
+
+networks:
+  elastic:
+    driver: bridge
